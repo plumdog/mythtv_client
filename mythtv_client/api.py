@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 from .models import (
     ProgramGuide,
     RecRule,
+    RecRuleList,
 )
 
 from vtypes import (
@@ -206,3 +207,21 @@ class AddRecordSchedule(Endpoint):
         for remove_key in remove_keys:
             del args[remove_key]
         self.post(**args)
+
+
+@API.register
+class GetRecordScheduleList(Endpoint):
+    service = 'Dvr'
+    endpoint = 'GetRecordScheduleList'
+    model = RecRuleList
+    args = (
+        Validator(
+            StartIndex=VInt(required=False),
+            Count=VInt(required=False),
+            Sort=VString(required=False),
+            Descending=VBool(required=False),
+        )
+    )
+    response_args = {
+        ('RecRuleList', '_recrulelist'): RecRuleList.validator,
+    }

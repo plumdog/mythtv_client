@@ -1,4 +1,5 @@
 import collections
+from enum import Enum
 
 from vtypes import (
     VString,
@@ -11,6 +12,7 @@ from vtypes import (
     VDate,
     VDateTime,
     VTime,
+    VEnum,
     Validator,
 )
 
@@ -29,6 +31,45 @@ class Props(object):
             if props & val:
                 found.add(formatted_name)
         return found
+
+
+class RecordingType(Enum):
+    """From https://github.com/MythTV/mythtv/blob/master/mythtv/libs/libmyth/recordingtypes.cpp#L76
+
+    The `toRawString` method converts to a string. I believe this are
+    always returned untranslated.
+
+    """
+    single_record = 'Single Record'
+    all_record = 'Record All'
+    record_one = 'Record One'
+    record_daily = 'Record Daily'
+    record_weekly = 'Record Weekly'
+    override_recording = 'Override Recording'
+    recording_template = 'Recording Template'
+    not_recording = 'Not Recording'
+
+    @property
+    def is_on(self):
+        return (self in self.__class__.on())
+
+    @property
+    def is_off(self):
+        return (self in self.__class__.off())
+
+    @classmethod
+    def on(cls):
+        return {
+            cls.single_record,
+            cls.all_record,
+            cls.record_one,
+            cls.record_daily,
+            cls.record_weekly,
+        }
+
+    @classmethod
+    def off(cls):
+        return set(cls) - cls.on
 
 
 class VideoProps(Props):
@@ -244,7 +285,7 @@ class RecRule(Base):
         CallSign=VString(),
         FindDay=VInt(),
         FindTime=VTime(required=False),
-        Type=VString(),
+        Type=VEnum(enum=RecordingType),
         SearchType=VString(),
         RecPriority=VInt(),
         PreferredInput=VUnsignedInt(),
@@ -276,3 +317,28 @@ class RecRule(Base):
     args = {
         '_recrule': validator
     }
+
+
+class RecRuleList(Base):
+    attr_key = '_recrulelist'
+    repr_attrs = ['AsOf', 'StartIndex', 'Count']
+    validator = Validator(
+        StartIndex=VInt(),
+        Count=VInt(),
+        TotalAvailable=VInt(),
+        AsOf=VDateTime(required=False),
+        Version=VString(),
+        ProtoVer=VString(),
+        RecRules=VList(of=VValidatorDict(validator=RecRule.validator)),
+    )
+
+    @property
+    def all_rec_rules(self):
+        yield from (RecRule(rr) for rr in self.RecRules)
+
+    @property
+    def non_template_rec_rules(self):
+        yield from (rr for rr in self.all_rec_rules if rr.Type.is_on)
+
+    def __iter__(self):
+        return iter(self.non_template_rec_rules)
